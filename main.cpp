@@ -111,13 +111,12 @@ struct Chromosome
 
     void print()
     {
-        cout<<'[';
         for (int i=0; i<genes.size()-1; i++)
         {
             cout<<genes[i]<<',';
         }
-        cout<<genes[genes.size()-1]<<"]  || Fitness = "<<fitness<<endl;
-
+        cout<<genes[genes.size()-1]<<endl;
+        cout<<"Fitness = "<<fitness<<endl<<endl;
     }
 
     void printDesmos()
@@ -250,22 +249,16 @@ int main() {
     freopen("../input.txt", "r", stdin);
     freopen("../output.txt", "w", stdout);
     int T;
-    bool flg = true;
     scanf("%d", &T);
 
     while (T--)
     {
         takeInput();
-        if(flg)
-        {
-            flg = false;
-            printDataset();
-        }
         runTestCase();
 
         //print best solution
-        cout<<"Case# "<<T<<":\n";
-        population[0].printDesmos();
+        cout<<"Case# "<<T<<" coefficients:\n";
+        population[0].print();
         cout<<endl;
     }
 }

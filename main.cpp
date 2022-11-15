@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <sstream>
+#include <set>
 
 #define pop_size 10
 //probability of crossover as a fraction of a thousand
@@ -13,7 +14,7 @@
 //probability of crossover as a fraction of a thousand
 #define prob_M 60
 #define K_Tournament 2
-#define DEP_FACTOR 1
+#define DEP_FACTOR 4
 
 using namespace std;
 
@@ -83,30 +84,35 @@ struct Chromosome
 
     bool operator<(const Chromosome& ch1)const
     {
-        return this->fitness < ch1.fitness;
+        return ch1.fitness < this->fitness;
+    }
+
+    bool operator==(const Chromosome& ch1)const
+    {
+        return this->genes == ch1.genes;
     }
 
     void mutate(double t, double T)
     {
-        if(!test(prob_M)) return;
+
         //non uniform mutation
-       for (int i=0; i<genes.size(); i++)
-       {
-           double delta;
-           bool low = test(5000);
+        for (int i=0; i<genes.size(); i++)
+        {
+            double delta;
+            bool low = test(500);
 
-           if(low)
-           {
-               delta = gen(0, genes[i]-minVal);
-               delta *= -1;
-           }
-           else
-               delta = gen(0, maxVal - genes[i]);
+            if(low)
+            {
+                delta = gen(0, genes[i]-minVal);
+                delta *= -1;
+            }
+            else
+                delta = gen(0, maxVal - genes[i]);
 
-           double r = gen(0, 1000)/1000.0;
-           genes[i] += delta * (1- pow(r, pow((1.0-t/T),DEP_FACTOR)));
-       }
-       updateFitness();
+            double r = gen(0, 1000)/1000.0;
+            genes[i] += delta * (1- pow(r, pow((1.0-t/T),DEP_FACTOR)));
+        }
+        updateFitness();
     }
 
     void print()
@@ -119,11 +125,24 @@ struct Chromosome
         cout<<"Fitness = "<<fitness<<endl<<endl;
     }
 
+    void print2()
+    {
+        cout<<'[';
+        for (int i=0; i<genes.size()-1; i++)
+        {
+            cout<<genes[i]<<',';
+        }
+        cout<<genes[genes.size()-1]<<"]  || Fitness = "<<fitness<<endl;
+
+    }
+
     void printDesmos()
     {
         for (int i=0; i<genes.size(); i++)
         {
-            cout<<genes[i]<<"x^"<<i<<" +";
+            if(i)
+                cout << " + ";
+            cout<<genes[i]<<"x^"<<i;
         }
         cout<<endl;
     }
@@ -139,8 +158,7 @@ void printDataset()
 
 void Chromosome::initialize()
 {
-        numGenes = degree+1;
-        //genes.resize(numGenes);
+    numGenes = degree+1;
 }
 
 
@@ -161,6 +179,9 @@ void runTestCase()
     population.clear();
     newGeneration.clear();
 
+    vector<Chromosome> matingPool;
+    std::mt19937 shuffleRNG(time(nullptr));
+
     //Initialize Population
     population.resize(pop_size);
 
@@ -168,27 +189,24 @@ void runTestCase()
     for (int currIter=1; currIter<=iterations; currIter++)
     {
         newGeneration.clear();
+
         //Tournament selection
-        for (int i=0; i<pop_size/2; i++)
-        {
-            vector<int> groupA;
-            vector<int> groupB;
-            for (int j=0; j<K_Tournament; j++)
-            {
-                groupA.push_back(gen(0, population.size()-1));
-                groupB.push_back(gen(0, population.size()-1));
-            }
-            //Get best of the two groups and store them
-            std::sort(groupA.rbegin(), groupA.rend());
-            std::sort(groupB.rbegin(), groupB.rend());
-            newGeneration.push_back(population[groupA[0]]);
-            newGeneration.push_back(population[groupB[0]]);
+        matingPool.clear();
+        vector<int> availableIndices(pop_size);
+        for(int i=0; i<pop_size; i++)
+            availableIndices[i] = i;
+        shuffle(availableIndices.begin(), availableIndices.end(), shuffleRNG);
+        for (int i=0; i<pop_size/2; i++) {
+            matingPool.push_back(max(population[availableIndices[i << 1]],
+                                     population[availableIndices[i << 1 | 1]]));
         }
+
 
         //Crossover
         for (int i=0; i<pop_size; i+=2)
         {
-            if(!test(prob_CO)) return;
+            if(!test(prob_CO))
+                continue;
 
             int cutOffPoint1 = gen(0,numGenes-2);
             int cutOffPoint2 = gen(0,numGenes-2);
@@ -196,23 +214,30 @@ void runTestCase()
             if(cutOffPoint1>cutOffPoint2)
                 swap(cutOffPoint1,cutOffPoint2);
 
+
+            int firstInd = gen(0, (int) matingPool.size() - 1);
+            int secondInd = gen(0, (int) matingPool.size() - 1);
             Chromosome c1 = Chromosome(
-                    GetSubChromosome(newGeneration[i],0,cutOffPoint1),
-                    GetSubChromosome(newGeneration[i+1],cutOffPoint1+1,cutOffPoint2),
-                    GetSubChromosome(newGeneration[i],cutOffPoint2+1,numGenes));
+                    GetSubChromosome(matingPool[firstInd],0,cutOffPoint1),
+                    GetSubChromosome(matingPool[secondInd],cutOffPoint1+1,cutOffPoint2),
+                    GetSubChromosome(matingPool[firstInd],cutOffPoint2+1,numGenes));
 
             Chromosome c2 = Chromosome(
-                    GetSubChromosome(newGeneration[i+1],0,cutOffPoint1),
-                    GetSubChromosome(newGeneration[i],cutOffPoint1+1,cutOffPoint2),
-                    GetSubChromosome(newGeneration[i+1],cutOffPoint2+1,numGenes));
+                    GetSubChromosome(matingPool[firstInd],0,cutOffPoint1),
+                    GetSubChromosome(matingPool[secondInd],cutOffPoint1+1,cutOffPoint2),
+                    GetSubChromosome(matingPool[firstInd],cutOffPoint2+1,numGenes));
 
-            newGeneration[i]    = c1;
-            newGeneration[i+1]  = c2;
+            newGeneration.push_back(c1);
+            newGeneration.push_back(c2);
         }
 
         //mutation
         for(auto c: newGeneration)
+        {
+            if(!test(prob_M))
+                continue;
             c.mutate(currIter, iterations);
+        }
 
         //Elitist replacement
         population.insert(population.end(),newGeneration.begin(), newGeneration.end());
@@ -233,16 +258,6 @@ void takeInput()
     }
 }
 
-vector<string> splitString(const string& s, char delim)
-{
-    stringstream raw(s);
-    string temp;
-    vector<string> arr;
-    while(getline(raw, temp, delim))
-        arr.push_back(temp);
-    return arr;
-}
-
 
 int main() {
 
@@ -250,15 +265,19 @@ int main() {
     freopen("../output.txt", "w", stdout);
     int T;
     scanf("%d", &T);
-
-    while (T--)
+    int temp = T;
+    for(int tc = 1; tc <= T; tc++)
     {
+
         takeInput();
+//        printDataset();
         runTestCase();
 
         //print best solution
-        cout<<"Case# "<<T<<" coefficients:\n";
+        cout<<"Case# "<<tc<<":\n";
+        cout<<"Case# "<<--temp<<":\n";
         population[0].print();
+//        population[0].printDesmos();
         cout<<endl;
     }
 }
